@@ -12,6 +12,12 @@ speak. For the sake of putting the code *somewhere*, the convention is to
 put views in a file called ``views.py``, placed in your project or
 application directory.
 
+.. seealso::
+
+    :doc:`Using async views </howto/async-views>`
+        How to write asynchronous views. Introduced in Django 3.1.
+
+
 A simple view
 =============
 

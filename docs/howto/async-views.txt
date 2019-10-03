@@ -1,0 +1,54 @@
+==================
+Using async views
+==================
+
+In Django 3.1+, Django views support using `asyncio` under the hood to implement view code with the `async def`/`await` pattern, allowing for native performance benefits when blocked code, for example code waiting for I/O on a file to unlock, can release control of CPU in favor of unblocked code. For more details on `asyncio` see the [asyncio documentation](https://docs.python.org/3/library/asyncio.html).
+
+Specifying a view as asynchronous in your Django project is easy. Simply define the view with the `async` keyword.
+
+```python
+from django.http import HttpResponse
+import datetime
+
+async def current_datetime(request):
+    now = datetime.datetime.now()
+    html = "<html><body>It is now %s.</body></html>" % now
+    return HttpResponse(html)
+
+```
+
+Under the hood, Django will call your view when the appropriate URL route is accessed with code somewhat like the following:
+
+```python
+response = await current_datetime()
+return response
+```
+
+Since the view was defined as `async`, and the call for that view was prefaced with `await`, `asyncio`'s event loop can manage execution of `current_datetime` to utilize CPU only when it needs to.
+
+
+Optimizing view code for asynchronous execution
+=================================================
+
+You can also use the `await` keyword in your own code to pass execution management of your view code to the event loop. Anywhere the `await` keyword is placed before a callable, you are providing an opportunity for the event loop to give CPU to a different asynchronous callable and defer execution of whatever you are `await`ing. It is particularly useful to `await` callables that are subject to I/O locks, since CPU is unused while the process waits for the I/O to become available.
+
+For example, if the following two views are accessed concurrently:
+
+```python
+async def current_datetime(request):
+    now = datetime.datetime.now()
+    html = "<html><body>It is now %s.</body></html>" % now
+    return HttpResponse(html)
+    
+async def open_popular_file(request):
+    f = await open('somefile.txt', 'r')
+    f.close()
+    return HttpResponse('<html><body>I opened your file, it was fun!</body></html>')
+```
+
+The same process can start executing `open_popular_file`, but switch to execution of `current_datetime` while the the file lock is being obtained, and pick back up with `open_popular_file` again a few milliseconds later when it is no longer blocked by I/O.
+
+You should use `await` whenever you want to give the event loop an opportunity to defer execution in favor of another `await`ed callable, but it is particularly recommended when
+* using the ORM
+* accessing files on disk or over network
+* making a network request such as to a third party REST API
