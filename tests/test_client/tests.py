@@ -844,6 +844,28 @@ class ClientTest(TestCase):
         self.assertEqual(response.content, b'named_temp_file')
 
 
+@override_settings(ROOT_URLCONF='test_client.urls')
+class AsyncClientTest(SimpleTestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.u1 = User.objects.create_user(username='testclient', password='password')
+        cls.u2 = User.objects.create_user(username='inactive',
+                                          password='password', is_active=False)
+
+    async def test_get_view(self):
+        "Test an async GET view"
+        # The data is ignored, but let's check it doesn't crash the system
+        # anyway.
+        data = {'var': '\xf2'}
+        response = await self.client.a.get('/get_view/', data)
+
+        # Check some response details
+        self.assertContains(response, 'This is a test')
+        self.assertEqual(response.context['var'], '\xf2')
+        self.assertEqual(response.templates[0].name, 'GET Template')
+
+
 @override_settings(
     MIDDLEWARE=['django.middleware.csrf.CsrfViewMiddleware'],
     ROOT_URLCONF='test_client.urls',

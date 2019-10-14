@@ -23,6 +23,7 @@ from django.core import mail
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.core.files import locks
 from django.core.handlers.wsgi import WSGIHandler, get_path_info
+from django.core.handlers.asgi import ASGIHandler
 from django.core.management import call_command
 from django.core.management.color import no_style
 from django.core.management.sql import emit_post_migrate_signal
@@ -166,9 +167,11 @@ class SimpleTestCase(unittest.TestCase):
         ('chunked_cursor', 'queries'),
     ]
 
+
+
     @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
+    async def setUpClass(cls):
+        await super().setUpClass()
         if cls._overridden_settings:
             cls._cls_overridden_context = override_settings(**cls._overridden_settings)
             cls._cls_overridden_context.enable()
@@ -221,7 +224,7 @@ class SimpleTestCase(unittest.TestCase):
                 setattr(connection, name, method.wrapped)
 
     @classmethod
-    def tearDownClass(cls):
+    async def tearDownClass(cls):
         cls._remove_databases_failures()
         if hasattr(cls, '_cls_modified_context'):
             cls._cls_modified_context.disable()
@@ -229,9 +232,13 @@ class SimpleTestCase(unittest.TestCase):
         if hasattr(cls, '_cls_overridden_context'):
             cls._cls_overridden_context.disable()
             delattr(cls, '_cls_overridden_context')
-        super().tearDownClass()
+        await super().tearDownClass()
 
-    def __call__(self, result=None):
+
+    async def __init__(self, *args, **kwargs):
+        await super()
+
+    async def __call__(self, result=None):
         """
         Wrapper around default __call__ method to perform common Django test
         set up. This means that user-defined Test Cases aren't required to
@@ -257,13 +264,13 @@ class SimpleTestCase(unittest.TestCase):
                 result.addError(self, sys.exc_info())
                 return
 
-    def _pre_setup(self):
+    async def _pre_setup(self):
         """
         Perform pre-test setup:
         * Create a test client.
         * Clear the mail test outbox.
         """
-        self.client = self.client_class()
+        self.client = await self.client_class()
         mail.outbox = []
 
     def _post_teardown(self):
