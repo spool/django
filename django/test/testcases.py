@@ -4,6 +4,7 @@ import posixpath
 import sys
 import threading
 import unittest
+from unittest import IsolatedAsyncioTestCase
 from collections import Counter
 from contextlib import contextmanager
 from copy import copy
@@ -145,7 +146,7 @@ class _DatabaseFailure:
         raise AssertionError(self.message)
 
 
-class SimpleTestCase(unittest.TestCase):
+class SimpleTestCase(IsolatedAsyncioTestCase):
 
     # The class we'll use for the test client self.client.
     # Can be overridden in derived classes.
@@ -167,11 +168,10 @@ class SimpleTestCase(unittest.TestCase):
         ('chunked_cursor', 'queries'),
     ]
 
-
-
     @classmethod
-    async def setUpClass(cls):
-        await super().setUpClass()
+    def setUpClass(cls):
+        # await super().setUpClass()
+        super().setUpClass()
         if cls._overridden_settings:
             cls._cls_overridden_context = override_settings(**cls._overridden_settings)
             cls._cls_overridden_context.enable()
@@ -224,7 +224,7 @@ class SimpleTestCase(unittest.TestCase):
                 setattr(connection, name, method.wrapped)
 
     @classmethod
-    async def tearDownClass(cls):
+    def tearDownClass(cls):
         cls._remove_databases_failures()
         if hasattr(cls, '_cls_modified_context'):
             cls._cls_modified_context.disable()
@@ -232,13 +232,15 @@ class SimpleTestCase(unittest.TestCase):
         if hasattr(cls, '_cls_overridden_context'):
             cls._cls_overridden_context.disable()
             delattr(cls, '_cls_overridden_context')
-        await super().tearDownClass()
+        # await super().tearDownClass()
+        super().tearDownClass()
 
 
-    async def __init__(self, *args, **kwargs):
-        await super()
+    # async def __init__(self, *args, **kwargs):
+    #     await super()
 
-    async def __call__(self, result=None):
+    # async def __call__(self, result=None):
+    def __call__(self, result=None):
         """
         Wrapper around default __call__ method to perform common Django test
         set up. This means that user-defined Test Cases aren't required to
@@ -264,13 +266,15 @@ class SimpleTestCase(unittest.TestCase):
                 result.addError(self, sys.exc_info())
                 return
 
-    async def _pre_setup(self):
+    #async def _pre_setup(self):
+    def _pre_setup(self):
         """
         Perform pre-test setup:
         * Create a test client.
         * Clear the mail test outbox.
         """
-        self.client = await self.client_class()
+        # self.client = await self.client_class()
+        self.client = self.client_class()
         mail.outbox = []
 
     def _post_teardown(self):
