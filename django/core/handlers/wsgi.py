@@ -1,8 +1,4 @@
-import asyncio
-import re
 from io import BytesIO
-
-from asgiref.sync import async_to_sync
 
 from django.conf import settings
 from django.core import signals
@@ -11,8 +7,9 @@ from django.http import HttpRequest, QueryDict, parse_cookie
 from django.urls import set_script_prefix
 from django.utils.encoding import repercent_broken_unicode
 from django.utils.functional import cached_property
+from django.utils.regex_helper import _lazy_re_compile
 
-_slashes_re = re.compile(br'/+')
+_slashes_re = _lazy_re_compile(br'/+')
 
 
 class LimitedStream:

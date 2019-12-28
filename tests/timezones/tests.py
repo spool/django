@@ -9,8 +9,7 @@ import pytz
 
 from django.contrib.auth.models import User
 from django.core import serializers
-from django.core.exceptions import ImproperlyConfigured
-from django.db import connection, connections
+from django.db import connection
 from django.db.models import F, Max, Min
 from django.http import HttpRequest
 from django.template import (
@@ -153,6 +152,7 @@ class LegacyDatabaseTests(TestCase):
         self.assertEqual(Event.objects.filter(dt__month=1).count(), 2)
         self.assertEqual(Event.objects.filter(dt__day=1).count(), 2)
         self.assertEqual(Event.objects.filter(dt__week_day=7).count(), 2)
+        self.assertEqual(Event.objects.filter(dt__iso_week_day=6).count(), 2)
         self.assertEqual(Event.objects.filter(dt__hour=1).count(), 1)
         self.assertEqual(Event.objects.filter(dt__minute=30).count(), 2)
         self.assertEqual(Event.objects.filter(dt__second=0).count(), 2)
@@ -366,6 +366,7 @@ class NewDatabaseTests(TestCase):
         self.assertEqual(Event.objects.filter(dt__month=1).count(), 2)
         self.assertEqual(Event.objects.filter(dt__day=1).count(), 2)
         self.assertEqual(Event.objects.filter(dt__week_day=7).count(), 2)
+        self.assertEqual(Event.objects.filter(dt__iso_week_day=6).count(), 2)
         self.assertEqual(Event.objects.filter(dt__hour=1).count(), 1)
         self.assertEqual(Event.objects.filter(dt__minute=30).count(), 2)
         self.assertEqual(Event.objects.filter(dt__second=0).count(), 2)
@@ -381,6 +382,7 @@ class NewDatabaseTests(TestCase):
             self.assertEqual(Event.objects.filter(dt__month=1).count(), 1)
             self.assertEqual(Event.objects.filter(dt__day=1).count(), 1)
             self.assertEqual(Event.objects.filter(dt__week_day=7).count(), 1)
+            self.assertEqual(Event.objects.filter(dt__iso_week_day=6).count(), 1)
             self.assertEqual(Event.objects.filter(dt__hour=22).count(), 1)
             self.assertEqual(Event.objects.filter(dt__minute=30).count(), 2)
             self.assertEqual(Event.objects.filter(dt__second=0).count(), 2)
@@ -529,6 +531,14 @@ class NewDatabaseTests(TestCase):
             cursor.execute('SELECT dt FROM timezones_event WHERE dt = %s', [utc_naive_dt])
             self.assertEqual(cursor.fetchall()[0][0], utc_naive_dt)
 
+    @skipUnlessDBFeature('supports_timezones')
+    def test_cursor_explicit_time_zone(self):
+        with override_database_connection_timezone('Europe/Paris'):
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT CURRENT_TIMESTAMP')
+                now = cursor.fetchone()[0]
+                self.assertEqual(now.tzinfo.zone, 'Europe/Paris')
+
     @requires_tz_support
     def test_filter_date_field_with_aware_datetime(self):
         # Regression test for #17742
@@ -590,27 +600,6 @@ class ForcedTimeZoneDatabaseTests(TransactionTestCase):
         event = Event.objects.get()
         fake_dt = datetime.datetime(2011, 9, 1, 17, 20, 30, tzinfo=UTC)
         self.assertEqual(event.dt, fake_dt)
-
-
-@skipUnlessDBFeature('supports_timezones')
-@override_settings(TIME_ZONE='Africa/Nairobi', USE_TZ=True)
-class UnsupportedTimeZoneDatabaseTests(TestCase):
-
-    def test_time_zone_parameter_not_supported_if_database_supports_timezone(self):
-        connections.databases['tz'] = connections.databases['default'].copy()
-        connections.databases['tz']['TIME_ZONE'] = 'Asia/Bangkok'
-        tz_conn = connections['tz']
-        try:
-            msg = (
-                "Connection 'tz' cannot set TIME_ZONE because its engine "
-                "handles time zones conversions natively."
-            )
-            with self.assertRaisesMessage(ImproperlyConfigured, msg):
-                tz_conn.cursor()
-        finally:
-            connections['tz'].close()       # in case the test fails
-            del connections['tz']
-            del connections.databases['tz']
 
 
 @override_settings(TIME_ZONE='Africa/Nairobi')
@@ -966,7 +955,7 @@ class TemplateTests(SimpleTestCase):
         with self.assertRaises(pytz.UnknownTimeZoneError):
             Template("{% load tz %}{% timezone tz %}{% endtimezone %}").render(Context({'tz': 'foobar'}))
 
-    @skipIf(sys.platform.startswith('win'), "Windows uses non-standard time zone names")
+    @skipIf(sys.platform == 'win32', "Windows uses non-standard time zone names")
     def test_get_current_timezone_templatetag(self):
         """
         Test the {% get_current_timezone %} templatetag.
@@ -1006,7 +995,7 @@ class TemplateTests(SimpleTestCase):
         with self.assertRaisesMessage(TemplateSyntaxError, msg):
             Template("{% load tz %}{% get_current_timezone %}").render()
 
-    @skipIf(sys.platform.startswith('win'), "Windows uses non-standard time zone names")
+    @skipIf(sys.platform == 'win32', "Windows uses non-standard time zone names")
     def test_tz_template_context_processor(self):
         """
         Test the django.template.context_processors.tz template context processor.
